@@ -42,6 +42,11 @@ object WindowsVm {
     /** True while the disk is still empty, which is when the installer's "Press any key" prompt shows. */
     fun isDiskFresh(ctx: Context) = File(dir(ctx), "disk.qcow2").length() < 200L shl 20
 
+    /** Fresh UEFI variables, which resets the firmware's boot list. Only safe before Windows is on the disk. */
+    fun resetFirmware(ctx: Context) {
+        File(Engine.root(ctx), "usr/share/qemu/edk2-arm-vars.fd").copyTo(File(dir(ctx), "vars.fd"), overwrite = true)
+    }
+
     suspend fun create(ctx: Context, iso: File, edition: Edition, user: String, password: String) = withContext(Dispatchers.IO) {
         val dir = dir(ctx)
         Engine.deleteTree(dir)
@@ -85,8 +90,9 @@ object WindowsVm {
             "-device", "ramfb",
             "-device", "qemu-xhci", "-device", "usb-kbd", "-device", "usb-tablet",
             "-audiodev", "none,id=snd", "-device", "usb-audio,audiodev=snd",
-            // Boot order: the disk, then the installer. Anything not listed (network boot) is skipped.
-            "-device", "nvme,drive=disk,serial=pane0,bootindex=0",
+            // No bootindex: with one, edk2 rebuilds its boot list from QEMU's hints, can't match the USB
+            // installer disc on ARM, and drops it. The default order already tries the USB disc first.
+            "-device", "nvme,drive=disk,serial=pane0",
             "-drive", "if=none,id=disk,format=qcow2,file=$d/disk.qcow2,cache=writeback,discard=unmap,detect-zeroes=unmap",
             "-nic", "user,model=virtio-net-pci",
             "-vnc", "unix:$d/vnc.sock,audiodev=snd",
@@ -94,7 +100,7 @@ object WindowsVm {
             "-monitor", "none", "-serial", "none",
         )
         iso(ctx)?.let {
-            args += listOf("-device", "usb-storage,drive=install,bootindex=1", "-drive", "if=none,id=install,format=raw,media=cdrom,readonly=on,file=${it.path}")
+            args += listOf("-device", "usb-storage,drive=install", "-drive", "if=none,id=install,format=raw,media=cdrom,readonly=on,file=${it.path}")
         }
         if (File(d, "setup.iso").exists()) {
             args += listOf("-device", "usb-storage,drive=setup", "-drive", "if=none,id=setup,format=raw,media=cdrom,readonly=on,file=$d/setup.iso")

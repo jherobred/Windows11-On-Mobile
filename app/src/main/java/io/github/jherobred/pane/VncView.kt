@@ -310,6 +310,9 @@ class VncView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
         return true
     }
 
+    /** Types text with US scancodes, e.g. a command at a firmware prompt. */
+    fun type(text: String) = text.forEach { ch -> Keys.forChar(ch)?.let { (sc, shift) -> tap(sc, shift) } }
+
     /** Taps a key, holding Shift if asked. Releases sticky modifiers afterwards. */
     fun tap(scancode: Int, shift: Boolean = false) {
         val c = client ?: return
@@ -349,7 +352,7 @@ class VncView(context: Context) : SurfaceView(context), SurfaceHolder.Callback {
         outAttrs.imeOptions = EditorInfo.IME_FLAG_NO_FULLSCREEN or EditorInfo.IME_FLAG_NO_EXTRACT_UI or EditorInfo.IME_ACTION_NONE
         return object : BaseInputConnection(this, false) {
             override fun commitText(text: CharSequence, newCursorPosition: Int): Boolean {
-                text.forEach { ch -> Keys.forChar(ch)?.let { (sc, shift) -> tap(sc, shift) } }
+                type(text.toString())
                 return true
             }
 

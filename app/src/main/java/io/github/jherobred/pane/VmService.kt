@@ -82,6 +82,10 @@ class VmService : Service() {
         val dir = WindowsVm.dir(this)
         File(dir, "vnc.sock").delete()
         File(dir, "qmp.sock").delete()
+        // Until Windows is on the disk, start from clean firmware settings. A boot list saved by 0.1.0 skips
+        // the installer disc.
+        val fresh = WindowsVm.isDiskFresh(this)
+        if (fresh) runCatching { WindowsVm.resetFirmware(this) }
         val p = try {
             Engine.proot(this, WindowsVm.qemuArgs(this), WindowsVm.binds(this)).start()
         } catch (e: Exception) {
@@ -119,15 +123,15 @@ class VmService : Service() {
 
         thread(name = "qemu-ready") {
             val vnc = File(dir, "vnc.sock")
-            val fresh = WindowsVm.isDiskFresh(this)
             repeat(600) {
                 if (process !== p) return@thread
                 if (vnc.exists()) {
                     state.value = VmState.Running(System.currentTimeMillis())
                     getSystemService(NotificationManager::class.java).notify(1, notification("Windows 11 is running"))
                     // The installer's "Press any key to boot from CD or DVD" times out in a few seconds.
-                    // Keep pressing Enter through the window where it can appear, only while the disk is empty.
-                    if (fresh) repeat(80) {
+                    // Keep pressing Enter for the first 5 minutes (slow phones reach it late), only while the
+                    // disk is empty.
+                    if (fresh) repeat(200) {
                         if (process !== p) return@thread
                         runCatching { qmp(this, "send-key", """{"keys":[{"type":"qcode","data":"ret"}]}""") }
                         Thread.sleep(1500)

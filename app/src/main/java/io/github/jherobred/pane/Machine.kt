@@ -41,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +56,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.io.File
 
 @Composable
@@ -70,6 +72,7 @@ fun MachineScreen(onHome: () -> Unit) {
     var trackpad by remember { mutableStateOf(true) }
     var sticky by remember { mutableStateOf(emptySet<Int>()) }
     var installed by remember { mutableStateOf(WindowsVm.isInstalled(ctx)) }
+    val scope = rememberCoroutineScope()
 
     FullScreen()
     LaunchedEffect(vm) {
@@ -190,6 +193,15 @@ fun MachineScreen(onHome: () -> Unit) {
             ) {
                 Text("Installing Windows · $minutes min", color = Pane.Ink, fontSize = 14.sp)
                 Spacer(Modifier.width(14.dp))
+                // If the firmware ends up at its Shell> prompt, start the installer from the ISO by hand,
+                // then press Enter through its "Press any key to boot from CD or DVD".
+                GhostButton("At Shell>? Boot installer", icon = Glyphs.Disc) {
+                    scope.launch {
+                        view?.type("fs0:\\efi\\boot\\bootaa64.efi\n")
+                        repeat(15) { delay(1500); view?.tap(Keys.ENTER) }
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
                 GhostButton("I see the desktop", icon = Glyphs.Check) { WindowsVm.markInstalled(ctx); installed = true }
             }
         }

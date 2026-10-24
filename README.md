@@ -35,6 +35,8 @@ v0.1.0 is tested on the Android emulator: engine install, VM creation, UEFI boot
    Setup runs by itself and restarts a few times.
 5. When the Windows desktop appears, tap **I see the desktop**.
 
+If setup ever stops at a black screen with a `Shell>` prompt, tap **At Shell>? Boot installer** on the bottom bar.
+
 If Windows stops while you use other apps, open Developer options and turn on **Disable child process restrictions**. Android 12 and later limit long-running helper processes.
 
 ## Controls
