@@ -35,7 +35,7 @@ v0.1.0 is tested on the Android emulator: engine install, VM creation, UEFI boot
    Setup runs by itself and restarts a few times.
 5. When the Windows desktop appears, tap **I see the desktop**.
 
-If setup ever stops at a black screen with a `Shell>` prompt, tap **At Shell>? Boot installer** on the bottom bar.
+If setup ever stops at a black screen with a `Shell>` prompt, tap **At Shell>? Start installer** on the bottom bar.
 
 If Windows stops while you use other apps, open Developer options and turn on **Disable child process restrictions**. Android 12 and later limit long-running helper processes.
 
@@ -79,7 +79,7 @@ Pane (Kotlin, Jetpack Compose)
 - **Input**: VNC pointer events (a USB tablet in the guest) and QEMU's scancode key events.
 - **Sound**: QEMU's VNC audio extension, played through AudioTrack.
 - **Control**: QEMU's QMP socket, for shutting down and quitting.
-- **Setup**: a generated `autounattend.xml` installs Windows unattended. It skips the TPM, Secure Boot and CPU checks QEMU can't meet, creates a local account, sets a US keyboard and your time zone. The Arm64 NetKVM network driver from virtio-win is added through `$WinPEDriver$`. Windows itself is left as Microsoft ships it.
+- **Setup**: a generated `autounattend.xml` installs Windows unattended. It skips the TPM, Secure Boot and CPU checks QEMU can't meet, creates a local account, sets a US keyboard and your time zone. The Arm64 NetKVM network driver from virtio-win installs at first sign-in. Windows itself is left as Microsoft ships it.
 - **Why it targets Android 9 (API 28)**: Android blocks apps that target API 29 or later from running programs they download, and QEMU is one. Termux and Vectras VM do the same.
 
 ## Build

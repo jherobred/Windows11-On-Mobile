@@ -50,16 +50,32 @@ object WindowsVm {
     suspend fun create(ctx: Context, iso: File, edition: Edition, user: String, password: String) = withContext(Dispatchers.IO) {
         val dir = dir(ctx)
         Engine.deleteTree(dir)
-        val setup = File(dir, "setup/\$WinPEDriver\$/NetKVM").apply { mkdirs() }
-        for (name in ctx.assets.list("drivers/NetKVM").orEmpty()) {
-            ctx.assets.open("drivers/NetKVM/$name").use { input -> File(setup, name).outputStream().use(input::copyTo) }
-        }
+        File(dir, "setup").mkdirs()
         File(dir, "setup/autounattend.xml").writeText(unattend(edition, user, password, language(iso.name)))
         File(Engine.root(ctx), "usr/share/qemu/edk2-arm-vars.fd").copyTo(File(dir, "vars.fd"))
-        val d = dir.path
-        Engine.run(Engine.proot(ctx, listOf("qemu-img", "create", "-f", "qcow2", "$d/disk.qcow2", "128G"), listOf(d)))
-        Engine.run(Engine.proot(ctx, listOf("xorriso", "-as", "mkisofs", "-quiet", "-J", "-R", "-V", "PANE_SETUP", "-o", "$d/setup.iso", "$d/setup"), listOf(d)))
+        Engine.run(Engine.proot(ctx, listOf("qemu-img", "create", "-f", "qcow2", "${dir.path}/disk.qcow2", "128G"), listOf(dir.path)))
+        prepareSetupDisc(ctx)
         prefs(ctx).edit().putString("iso", iso.canonicalPath).putBoolean("installed", false).apply()
+    }
+
+    /**
+     * Builds the setup disc: autounattend.xml plus drivers, which Windows installs at first sign-in.
+     * Also repairs discs from 0.1.0 and 0.1.1, which put the drivers in `$WinPEDriver$` without
+     * netkvmp.exe: Setup tried to install them itself and stopped with 0x80070002.
+     */
+    fun prepareSetupDisc(ctx: Context) {
+        val d = dir(ctx)
+        val setup = File(d, "setup")
+        Engine.deleteTree(File(setup, "\$WinPEDriver\$"))
+        Engine.deleteTree(File(setup, "Drivers"))
+        val drivers = File(setup, "Drivers/NetKVM").apply { mkdirs() }
+        for (name in ctx.assets.list("drivers/NetKVM").orEmpty()) {
+            ctx.assets.open("drivers/NetKVM/$name").use { input -> File(drivers, name).outputStream().use(input::copyTo) }
+        }
+        val xml = File(setup, "autounattend.xml")
+        xml.writeText(xml.readText().replace("\$WinPEDriver\$", "Drivers"))
+        File(d, "setup.iso").delete()
+        Engine.run(Engine.proot(ctx, listOf("xorriso", "-as", "mkisofs", "-quiet", "-J", "-R", "-V", "PANE_SETUP", "-o", "${d.path}/setup.iso", setup.path), listOf(d.path)))
     }
 
     fun delete(ctx: Context) {
@@ -130,8 +146,8 @@ object WindowsVm {
                 """<RunSynchronousCommand wcm:action="add"><Order>${i + 1}</Order><Path>reg add HKLM\SYSTEM\Setup\LabConfig /v $v /t REG_DWORD /d 1 /f</Path></RunSynchronousCommand>"""
             }.joinToString("")
         val firstLogon = listOf(
-            // Drivers from the setup disc, in case Setup's own pass missed them.
-            """cmd /c for %d in (D E F G H I J K L M N O P Q R S T U V W Y Z) do @if exist "%d:\${'$'}WinPEDriver${'$'}" pnputil /add-driver "%d:\${'$'}WinPEDriver${'$'}\*.inf" /subdirs /install""",
+            // Drivers from the setup disc. Installed here, not by Setup, so a driver problem can't stop Setup.
+            """cmd /c for %d in (D E F G H I J K L M N O P Q R S T U V W Y Z) do @if exist "%d:\Drivers\NetKVM" pnputil /add-driver "%d:\Drivers\*.inf" /subdirs /install""",
             // Pane's Shut down button presses the virtual power button. Make that shut down, not sleep.
             "powercfg /setacvalueindex SCHEME_CURRENT SUB_BUTTONS PBUTTONACTION 3",
             "powercfg /setactive SCHEME_CURRENT",

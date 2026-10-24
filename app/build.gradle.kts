@@ -24,8 +24,8 @@ android {
         // 28 on purpose: Android blocks apps targeting 29+ from running programs they unpack, and the
         // emulator (proot + QEMU from Alpine) is exactly that. Termux and Vectras VM do the same.
         targetSdk = 28
-        versionCode = 2
-        versionName = "0.1.1"
+        versionCode = 3
+        versionName = "0.1.2"
         // x86_64 is for the Android emulator on a PC, where the whole pipeline can be tested.
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")

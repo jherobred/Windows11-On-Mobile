@@ -41,7 +41,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,7 +55,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import java.io.File
 
 @Composable
@@ -72,11 +70,15 @@ fun MachineScreen(onHome: () -> Unit) {
     var trackpad by remember { mutableStateOf(true) }
     var sticky by remember { mutableStateOf(emptySet<Int>()) }
     var installed by remember { mutableStateOf(WindowsVm.isInstalled(ctx)) }
-    val scope = rememberCoroutineScope()
 
     FullScreen()
     LaunchedEffect(vm) {
         if (vm is VmState.Stopped) { delay(400); onHome() }
+    }
+    // Also press Enter through the screen connection while the disk is empty, for the installer's "Press any
+    // key to boot from CD or DVD". The service does the same over QMP; this path is the one proven on phones.
+    LaunchedEffect(vm is VmState.Running) {
+        if (vm is VmState.Running && WindowsVm.isDiskFresh(ctx)) repeat(200) { delay(1500); view?.tap(Keys.ENTER) }
     }
     LaunchedEffect(bar, keysRow, powerMenu) {
         if (bar && !keysRow && !powerMenu) { delay(6000); bar = false }
@@ -193,13 +195,10 @@ fun MachineScreen(onHome: () -> Unit) {
             ) {
                 Text("Installing Windows · $minutes min", color = Pane.Ink, fontSize = 14.sp)
                 Spacer(Modifier.width(14.dp))
-                // If the firmware ends up at its Shell> prompt, start the installer from the ISO by hand,
-                // then press Enter through its "Press any key to boot from CD or DVD".
-                GhostButton("At Shell>? Boot installer", icon = Glyphs.Disc) {
-                    scope.launch {
-                        view?.type("fs0:\\efi\\boot\\bootaa64.efi\n")
-                        repeat(15) { delay(1500); view?.tap(Keys.ENTER) }
-                    }
+                // If the firmware ends up at its Shell> prompt, start the installer by hand. fs1: is the ISO's
+                // UDF volume, whose boot manager has no "Press any key to boot from CD or DVD" (fs0:'s does).
+                GhostButton("At Shell>? Start installer", icon = Glyphs.Disc) {
+                    view?.type("fs1:\\efi\\boot\\bootaa64.efi\n")
                 }
                 Spacer(Modifier.width(8.dp))
                 GhostButton("I see the desktop", icon = Glyphs.Check) { WindowsVm.markInstalled(ctx); installed = true }

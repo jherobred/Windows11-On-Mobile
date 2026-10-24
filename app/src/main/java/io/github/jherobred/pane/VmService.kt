@@ -54,6 +54,7 @@ class VmService : Service() {
 
     @Volatile private var process: Process? = null
     @Volatile private var killed = false
+    @Volatile private var launching = false
     private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -70,23 +71,29 @@ class VmService : Service() {
                     process?.destroyForcibly()
                 }
             }
-            else -> if (process == null) launch()
+            else -> if (process == null && !launching) {
+                launching = true
+                killed = false
+                startForeground(1, notification("Starting Windows 11"))
+                state.value = VmState.Starting
+                thread(name = "qemu-launch") { launch(); launching = false }
+            }
         }
         return START_NOT_STICKY
     }
 
     private fun launch() {
-        killed = false
-        startForeground(1, notification("Starting Windows 11"))
-        state.value = VmState.Starting
         val dir = WindowsVm.dir(this)
         File(dir, "vnc.sock").delete()
         File(dir, "qmp.sock").delete()
-        // Until Windows is on the disk, start from clean firmware settings. A boot list saved by 0.1.0 skips
-        // the installer disc.
+        // Until Windows is on the disk: clean firmware settings (0.1.0 saved a boot list that skips the
+        // installer disc) and a freshly built setup disc (0.1.0 and 0.1.1 shipped a broken driver folder).
         val fresh = WindowsVm.isDiskFresh(this)
-        if (fresh) runCatching { WindowsVm.resetFirmware(this) }
         val p = try {
+            if (fresh) {
+                WindowsVm.resetFirmware(this)
+                WindowsVm.prepareSetupDisc(this)
+            }
             Engine.proot(this, WindowsVm.qemuArgs(this), WindowsVm.binds(this)).start()
         } catch (e: Exception) {
             finish("Couldn't start QEMU: ${e.message}")
